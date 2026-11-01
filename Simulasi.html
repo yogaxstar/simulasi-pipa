@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlowLab v3 — Entrance Region &amp; Fully Developed Pipe Flow</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#1e1e1e;--pn:#252526;--hd:#333;--bd:#3e3e42;--tx:#ccc;--wh:#fff;--mu:#858585;--ac:#007acc;--ok:#89d185;--wn:#cca700;--er:#f48771}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font:13px 'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--tx);height:100vh;display:grid;grid-template-columns:290px 1fr;grid-template-rows:1fr 290px;overflow:hidden}
+.panel{background:var(--pn);border:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.ph{background:var(--hd);padding:6px 12px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--wh)}
+.pc{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:10px}
+#side{grid-row:1/2}
+#view{position:relative;background:#000}
+#bottom{grid-column:1/3}
+label{display:flex;justify-content:space-between;color:var(--wh);font-size:12px;margin-bottom:3px}
+label span{color:var(--ac);font-family:Consolas,monospace}
+select{width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--tx);padding:6px;border-radius:3px;font-family:Consolas,monospace}
+input[type=range]{width:100%}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.box{background:var(--bg);border:1px solid var(--bd);padding:6px;border-radius:3px}
+.box.w{grid-column:1/-1}
+.bl{font-size:10px;color:var(--mu);text-transform:uppercase}
+.bv{font:700 13px Consolas,monospace;color:var(--ok);margin-top:2px}
+#warn{font-size:11px;color:var(--wn);line-height:1.4}
+canvas{display:block}
+#cv3{width:100%;height:100%}
+#legend{position:absolute;bottom:10px;left:10px;background:rgba(30,30,30,.85);border:1px solid var(--bd);padding:8px;border-radius:4px;font:10px Consolas,monospace;display:flex;gap:8px}
+#bar{width:14px;height:120px;background:linear-gradient(to top,#00f,#0ff,#0f0,#ff0,#f00);border:1px solid #000}
+#ticks{display:flex;flex-direction:column;justify-content:space-between;height:120px}
+#note{position:absolute;top:8px;left:10px;font-size:11px;color:var(--mu);pointer-events:none}
+.tabs{display:flex;background:var(--hd);border-bottom:1px solid var(--bd)}
+.tab{padding:6px 15px;cursor:pointer;font-size:12px;color:var(--mu);border-bottom:2px solid transparent}
+.tab.on{color:var(--wh);border-bottom-color:var(--ac);background:var(--pn)}
+.tc{display:none;flex:1;padding:8px;min-height:0;position:relative;overflow:auto}
+.tc.on{display:block}
+.cw{position:relative;height:100%}
+</style>
+</head>
+<body>
+
+<div class="panel" id="side">
+  <div class="ph">Setup &amp; Hasil</div>
+  <div class="pc">
+    <div><label>Fluida</label>
+      <select id="fluid"><option value="water">Water-liquid</option><option value="air">Air (udara)</option><option value="oil">Engine Oil</option></select></div>
+    <div><label>Kecepatan masuk (v) <span id="lV"></span></label>
+      <input type="range" id="velS" min="-1" max="3" step="0.005" value="1">
+      <input type="number" id="vel" min="0.1" max="1000" step="any" value="10" style="margin-top:6px;width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--tx);padding:6px;border-radius:3px;font-family:Consolas,monospace">
+      <div style="font-size:10px;color:var(--mu);margin-top:3px">Slider skala log (0,1 – 1000 m/s). Ketik angka di kotak untuk nilai pas.</div></div>
+    <div><label>Diameter D <span id="lD"></span></label><input type="range" id="D" min="0.05" max="1" step="0.05" value="0.2"></div>
+    <div><label>Panjang pipa L <span id="lL"></span></label><input type="range" id="L" min="5" max="100" step="1" value="30"></div>
+    <div><label>Kekasaran ε <span id="lE"></span></label><input type="range" id="E" min="0" max="5" step="0.01" value="0"></div>
+    <div class="grid">
+      <div class="box"><div class="bl">Reynolds</div><div class="bv" id="rRe"></div></div>
+      <div class="box"><div class="bl">Regime</div><div class="bv" id="rReg"></div></div>
+      <div class="box"><div class="bl">Entry length Lh</div><div class="bv" id="rLh"></div></div>
+      <div class="box"><div class="bl">Lh / D</div><div class="bv" id="rLhD"></div></div>
+      <div class="box w"><div class="bl">Status di ujung pipa</div><div class="bv" id="rDev"></div></div>
+      <div class="box"><div class="bl">V max (fully dev.)</div><div class="bv" id="rVmax" style="color:#38bdf8"></div></div>
+      <div class="box"><div class="bl">Faktor gesek f</div><div class="bv" id="rF"></div></div>
+      <div class="box"><div class="bl">ΔP total</div><div class="bv" id="rDp" style="color:var(--er)"></div></div>
+      <div class="box"><div class="bl">Tegangan geser τw</div><div class="bv" id="rTau"></div></div>
+      <div class="box w"><div class="bl">Mach (v / c)</div><div class="bv" id="rMa"></div></div>
+    </div>
+    <div id="warn"></div>
+  </div>
+</div>
+
+<div class="panel" id="view">
+  <div id="note">Irisan memanjang pipa (partikel tracer). Aliran dari kiri ke kanan. Radius digambar diperbesar.</div>
+  <canvas id="cv3"></canvas>
+  <div id="legend"><div id="bar"></div><div><div id="ticks"></div><div style="color:#858585;text-align:center">[m/s]</div></div></div>
+</div>
+
+<div class="panel" id="bottom">
+  <div class="tabs">
+    <div class="tab on" data-t="t1">Profil Kecepatan (entry → fully developed)</div>
+    <div class="tab" data-t="t2">Kecepatan Centerline vs x</div>
+  </div>
+  <div class="tc on" id="t1"><div class="cw"><canvas id="c1"></canvas></div></div>
+  <div class="tc" id="t2"><div class="cw"><canvas id="c2"></canvas></div></div>
+</div>
+
+<script>
+// ===== DATA =====
+const FL={water:{n:'Water',rho:998.2,mu:1.003e-3,c:1480},air:{n:'Air',rho:1.225,mu:1.7894e-5,c:343},oil:{n:'Engine Oil',rho:889,mu:1.06,c:1450}};
+const $=id=>document.getElementById(id);
+const fmt=(x,d=2)=>x.toLocaleString('id-ID',{maximumFractionDigits:d});
+let S={};
+
+// ===== FISIKA =====
+function calc(fk,v,D,L,epsmm){
+  const F=FL[fk],eps=epsmm/1000;
+  const Re=F.rho*v*D/F.mu, lam=Re<2300;
+  let f;
+  if(lam) f=64/Re;
+  else{f=0.02;for(let i=0;i<50;i++)f=1/Math.pow(-2*Math.log10(eps/D/3.7+2.51/(Re*Math.sqrt(f))),2);}
+  const Lh=lam?0.05*Re*D:4.4*Math.pow(Re,1/6)*D;          // panjang entry (hydrodynamic)
+  const vmax=lam?2*v:(60/49)*v;
+  return{Re,lam,trans:Re>=2300&&Re<4000,f,Lh,vmax,dp:f*(L/D)*0.5*F.rho*v*v,tau:f/8*F.rho*v*v,Ma:v/F.c};
+}
+// Profil u/U pada posisi xr = x/Lh (rata-rata = 1). Inti seragam + lapisan batas tumbuh dari dinding.
+function profile(lam,xr,n){
+  const d=Math.max(0.02,Math.min(1,Math.pow(Math.max(xr,0),lam?0.5:0.8)));
+  const g=e=>e>=1?1:(lam?2*e-e*e:Math.pow(e,1/7));
+  const u=[];for(let i=0;i<=n;i++)u.push(g((1-i/n)/d));
+  let m=0;for(let i=0;i<n;i++)m+=(u[i]*i/n+u[i+1]*(i+1)/n)/2/n;
+  m*=2;return u.map(x=>x/m);
+}
+
+// ===== 3D =====
+const NP=14000,NB=48,NR=40,LV=12,RV=0.6;
+let scene,camera,renderer,controls,pts,tab=new Float32Array(NB*(NR+1)),ctab=new Float32Array(NB*(NR+1)*3);
+let px=new Float32Array(NP),pr=new Float32Array(NP),pos=new Float32Array(NP*3),col=new Float32Array(NP*3);
+const clock=new THREE.Clock();
+function jet(v){v=Math.max(0,Math.min(1,v));const k=t=>Math.max(0,Math.min(1,1.5-Math.abs(v*4-t)));return[k(3),k(2),k(1)]}
+function init3D(){
+  const c=$('view');
+  scene=new THREE.Scene();scene.background=new THREE.Color(0x0a0a0a);
+  camera=new THREE.PerspectiveCamera(45,1,0.1,100);camera.position.set(0,3,11);
+  renderer=new THREE.WebGLRenderer({canvas:$('cv3'),antialias:true});renderer.setPixelRatio(devicePixelRatio);
+  controls=new THREE.OrbitControls(camera,renderer.domElement);controls.enableDamping=true;
+  new ResizeObserver(()=>{camera.aspect=c.clientWidth/c.clientHeight;camera.updateProjectionMatrix();renderer.setSize(c.clientWidth,c.clientHeight,false)}).observe(c);
+  const g=new THREE.CylinderGeometry(RV,RV,LV,48,1,true);g.rotateZ(Math.PI/2);
+  scene.add(new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:0x888888,wireframe:true,transparent:true,opacity:.12})));
+  for(let i=0;i<NP;i++){
+    px[i]=Math.random();pr[i]=Math.random();
+    pos[i*3+1]=pr[i]*RV*(Math.random()<.5?-1:1)*.99;pos[i*3+2]=(Math.random()-.5)*0.04;
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  pts=new THREE.Points(geo,new THREE.PointsMaterial({size:0.05,vertexColors:true,transparent:true,opacity:.9,depthWrite:false}));
+  scene.add(pts);
+  loop();
+}
+function buildTab(){
+  const r=S.r,vN=r.vmax/S.v;
+  for(let b=0;b<NB;b++){
+    const p=profile(r.lam,(b+.5)/NB*S.L/r.Lh,NR);
+    for(let j=0;j<=NR;j++){
+      const k=b*(NR+1)+j;tab[k]=p[j];const c=jet(p[j]/vN);ctab.set(c,k*3);
+    }
+  }
+}
+function loop(){
+  requestAnimationFrame(loop);
+  const dt=Math.min(clock.getDelta(),0.05);
+  for(let i=0;i<NP;i++){
+    const b=Math.min(NB-1,Math.floor(px[i]*NB)),j=Math.min(NR,Math.floor(pr[i]*NR)),k=b*(NR+1)+j;
+    px[i]+=tab[k]*dt/8;               // animasi dinormalkan: partikel rata-rata melintas pipa dalam ~8 detik
+    if(px[i]>=1)px[i]-=1;
+    pos[i*3]=(px[i]-.5)*LV;
+    const k2=Math.min(NB-1,Math.floor(px[i]*NB))*(NR+1)+j;
+    col[i*3]=ctab[k2*3];col[i*3+1]=ctab[k2*3+1];col[i*3+2]=ctab[k2*3+2];
+  }
+  pts.geometry.attributes.position.needsUpdate=true;pts.geometry.attributes.color.needsUpdate=true;
+  controls.update();renderer.render(scene,camera);
+}
+
+// ===== CHARTS =====
+let c1,c2;
+function initCharts(){
+  Chart.defaults.color='#858585';
+  const base=(xt,yt)=>({responsive:true,maintainAspectRatio:false,animation:false,scales:{x:{title:{display:true,text:xt},ticks:{maxTicksLimit:11}},y:{title:{display:true,text:yt},beginAtZero:true}},plugins:{legend:{labels:{boxWidth:12}}}});
+  c1=new Chart($('t1').querySelector('canvas'),{type:'line',data:{labels:[],datasets:[]},options:base('r/R','Kecepatan u (m/s)')});
+  c2=new Chart($('t2').querySelector('canvas'),{type:'line',data:{labels:[],datasets:[]},options:base('x (m)','Kecepatan centerline (m/s)')});
+}
+function updateCharts(){
+  const r=S.r,U=S.v,cols=['#38bdf8','#34d399','#fbbf24','#fb923c','#f87171'];
+  const labels=[];for(let i=-40;i<=40;i++)labels.push((i/40).toFixed(2));
+  const ds=[];
+  [0.001,0.1,0.3,0.6].forEach((xr,k)=>{
+    if(xr*r.Lh>S.L)return;
+    const p=profile(r.lam,xr,40);
+    ds.push({label:`x = ${fmt(xr*r.Lh)} m (x/Lh=${xr<0.01?'≈0':xr})`,data:labels.map((_,i)=>p[Math.abs(i-40)]*U),borderColor:cols[k],borderWidth:2,pointRadius:0});
+  });
+  const pf=profile(r.lam,1,40);
+  ds.push({label:`Fully developed (x ≥ ${fmt(r.Lh)} m)`,data:labels.map((_,i)=>pf[Math.abs(i-40)]*U),borderColor:'#fff',borderDash:[6,4],borderWidth:2,pointRadius:0});
+  c1.data.labels=labels;c1.data.datasets=ds;c1.update();
+  const xs=[],uc=[];
+  for(let i=0;i<=60;i++){const x=i/60*S.L;xs.push(fmt(x,1));uc.push(profile(r.lam,x/r.Lh,40)[0]*U);}
+  c2.data.labels=xs;
+  c2.data.datasets=[{label:'u centerline',data:uc,borderColor:'#38bdf8',borderWidth:2,pointRadius:0},
+    {label:'V max fully developed',data:xs.map(()=>r.vmax),borderColor:'#fff',borderDash:[6,4],borderWidth:1,pointRadius:0}];
+  c2.update();
+}
+
+// ===== UI =====
+function update(){
+  S.fk=$('fluid').value;S.v=Math.min(1000,Math.max(0.1,+$('vel').value||10));$('lV').innerText=fmt(S.v,2)+' m/s';S.D=+$('D').value;S.L=+$('L').value;S.E=+$('E').value;
+  $('lD').innerText=S.D.toFixed(2)+' m';$('lL').innerText=S.L+' m';$('lE').innerText=S.E.toFixed(2)+' mm';
+  const r=S.r=calc(S.fk,S.v,S.D,S.L,S.E);
+  $('rRe').innerText=fmt(r.Re,0);
+  const rg=$('rReg');rg.innerText=r.lam?'LAMINAR':(r.trans?'TRANSISI→TURBULEN':'TURBULEN');rg.style.color=r.lam?'var(--ok)':'var(--er)';
+  $('rLh').innerText=fmt(r.Lh)+' m';$('rLhD').innerText=fmt(r.Lh/S.D,1);
+  const dv=$('rDev');dv.innerText=r.Lh<=S.L?'FULLY DEVELOPED (L > Lh)':'BELUM FULLY DEVELOPED (L < Lh)';dv.style.color=r.Lh<=S.L?'var(--ok)':'var(--wn)';
+  $('rVmax').innerText=fmt(r.vmax,2)+' m/s';$('rF').innerText=r.f.toFixed(5);
+  $('rDp').innerText=r.dp>1e5?fmt(r.dp/1e3,1)+' kPa':fmt(r.dp,1)+' Pa';
+  $('rTau').innerText=fmt(r.tau,2)+' Pa';$('rMa').innerText=fmt(r.Ma,3);
+  $('warn').innerHTML=(r.Ma>0.3?'⚠ Mach &gt; 0,3: efek kompresibilitas signifikan. Model aliran incompressible ini hanya pendekatan kasar untuk kasus ini.<br>':'')+
+    (r.Lh>S.L?'ℹ Pipa lebih pendek dari entry length. Perbesar L agar profil fully developed terlihat.':'');
+  const tk=$('ticks');tk.innerHTML='';for(let i=5;i>=0;i--){const d=document.createElement('div');d.innerText=fmt(r.vmax*i/5,1);tk.appendChild(d);}
+  buildTab();updateCharts();
+}
+document.querySelectorAll('select,input[type=range]:not(#velS)').forEach(e=>e.addEventListener('input',update));
+$('velS').addEventListener('input',()=>{$('vel').value=+Math.pow(10,+$('velS').value).toPrecision(3);update();});
+$('vel').addEventListener('input',()=>{const v=+$('vel').value;if(v>0)$('velS').value=Math.log10(Math.min(1000,Math.max(0.1,v)));update();});
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab,.tc').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on');$(t.dataset.t).classList.add('on');c1.resize();c2.resize();}));
+window.onload=()=>{initCharts();init3D();update();};
+</script>
+</body>
+</html>
